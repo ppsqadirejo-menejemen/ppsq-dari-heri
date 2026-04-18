@@ -182,9 +182,9 @@ async function sendFinanceNotification(params: {
 
   // 2. Build the message with the requested automatic link
   const cleanId = santriId.startsWith("'") ? santriId.slice(1) : santriId;
-  const baseUrl = process.env.APP_URL || process.env.URL_APLIKASI || 'https://ppsq2.vercel.app';
+  const rawBaseUrl = (process.env.APP_URL || process.env.URL_APLIKASI || 'https://ppsq2.vercel.app').trim();
   // Ensure no trailing slash
-  const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  const cleanBaseUrl = rawBaseUrl.endsWith('/') ? rawBaseUrl.slice(0, -1) : rawBaseUrl;
   const cekKeuanganUrl = `${cleanBaseUrl}/cek-keuangan/${encodeURIComponent(cleanId)}`;
   
   let msg = `*NOTIFIKASI PEMBAYARAN PPSQ*\n\n`;
@@ -1755,9 +1755,15 @@ app.post("/api/whatsapp/send-single", async (req, res) => {
   }
 });
 
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Express Global Error:", err);
+  res.status(500).json({ error: err.message || "Internal Server Error" });
+});
+
 // Vite middleware setup
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     const vitePkg = "vite";
     const { createServer: createViteServer } = await import(vitePkg);
     const vite = await createViteServer({
@@ -1765,7 +1771,7 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (!process.env.VERCEL) {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
@@ -1773,20 +1779,13 @@ async function startServer() {
     });
   }
 
-  // Global Error Handler
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error("Express Global Error:", err);
-    res.status(500).json({ error: err.message || "Internal Server Error" });
-  });
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
-// Only start the server if not running on Vercel
-if (!process.env.VERCEL) {
-  startServer();
-}
+startServer();
 
 export default app;
