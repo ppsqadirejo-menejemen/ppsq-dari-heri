@@ -149,8 +149,11 @@ async function sendFinanceNotification(params: {
   kekuranganBaru?: number;
   saldoSaatIni?: number;
   keterangan?: string;
+  kewajibanBulanan?: number;
+  saldoLalu?: number;
+  tanggalTerakhir?: string;
 }) {
-  let { phone, santriId, namaSantri, namaAyah, type, amount, bulan, tahun, titipanBaru, kekuranganBaru, saldoSaatIni, keterangan } = params;
+  let { phone, santriId, namaSantri, namaAyah, type, amount, bulan, tahun, titipanBaru, kekuranganBaru, saldoSaatIni, keterangan, kewajibanBulanan, saldoLalu, tanggalTerakhir } = params;
 
   // 1. If phone is missing, lookup from Santri sheet (Combining data from GS)
   if (!phone && santriId) {
@@ -189,26 +192,40 @@ async function sendFinanceNotification(params: {
   msg += `Nama: ${namaSantri}\n`;
   msg += `Bin/Binti: ${namaAyah}\n`;
   
-  if (bulan && tahun) {
-    msg += `Periode: ${bulan} ${tahun}\n`;
-  }
-  
-  msg += `-----------------------------------------\n`;
-  msg += `Jumlah: Rp ${amount.toLocaleString('id-ID')}\n`;
-  
   const isSyahriah = type.toLowerCase().includes('syahriah');
-  if (isSyahriah) {
-    if (titipanBaru !== undefined) msg += `Titipan: Rp ${titipanBaru.toLocaleString('id-ID')}\n`;
-    if (kekuranganBaru !== undefined) msg += `Kekurangan: Rp ${kekuranganBaru.toLocaleString('id-ID')}\n`;
+  if (isSyahriah && bulan) {
+    // Exact format requested by user for Syahriah
+    const prevBal = saldoLalu || 0;
+    const prevTypeLabel = prevBal >= 0 ? 'Tunggakan' : 'Titipan';
+    msg += `Titipan/Tunggakan bulan lalu: ${prevTypeLabel} Rp ${Math.abs(prevBal).toLocaleString('id-ID')} (Tgl: ${tanggalTerakhir || '-'})\n`;
+    msg += `Kewajiban bulanan: Rp ${(kewajibanBulanan || 0).toLocaleString('id-ID')}\n`;
+    msg += `-----------------------------------------\n`;
+    msg += `Bulan yang dibayar: ${bulan} ${tahun || ''}\n`;
+    msg += `Total tagihan: Rp ${(prevBal + (kewajibanBulanan || 0)).toLocaleString('id-ID')}\n`;
+    msg += `-----------------------------------------\n`;
+    msg += `Jumlah bayar: Rp ${amount.toLocaleString('id-ID')}\n`;
+    msg += `Titipan baru: Rp ${(titipanBaru || 0).toLocaleString('id-ID')}\n`;
+    msg += `Kekurangan baru: Rp ${(kekuranganBaru || 0).toLocaleString('id-ID')}\n`;
   } else {
-    // For Titipan Harian / Allowance
-    if (saldoSaatIni !== undefined) msg += `Saldo Saat Ini: Rp ${saldoSaatIni.toLocaleString('id-ID')}\n`;
+    // Format for others/fallback
+    if (bulan && tahun) {
+      msg += `Periode: ${bulan} ${tahun}\n`;
+    }
+    msg += `-----------------------------------------\n`;
+    msg += `Jumlah: Rp ${amount.toLocaleString('id-ID')}\n`;
+    
+    if (isSyahriah) {
+      if (titipanBaru !== undefined) msg += `Titipan: Rp ${titipanBaru.toLocaleString('id-ID')}\n`;
+      if (kekuranganBaru !== undefined) msg += `Kekurangan: Rp ${kekuranganBaru.toLocaleString('id-ID')}\n`;
+    } else {
+      // For Titipan Harian / Allowance
+      if (saldoSaatIni !== undefined) msg += `Saldo Saat Ini: Rp ${saldoSaatIni.toLocaleString('id-ID')}\n`;
+    }
+    if (keterangan) msg += `Keterangan: ${keterangan}\n`;
   }
-
-  if (keterangan) msg += `Keterangan: ${keterangan}\n`;
   
   msg += `-----------------------------------------\n`;
-  msg += `Cek Riwayat Keuangan: ${cekKeuanganUrl}\n\n`;
+  msg += `Lihat Bukti Pembayaran: ${cekKeuanganUrl}\n\n`;
   msg += `Pesan dikirim otomatis oleh sistem, jika ada kekeliruan silahkan hubungi pihak pondok.`;
 
   return await sendWhatsApp(phone, msg);
@@ -1314,7 +1331,10 @@ app.post("/api/finance/add", async (req, res) => {
         tahun: tahun,
         titipanBaru: titipanNum,
         kekuranganBaru: kekuranganNum,
-        keterangan: keterangan
+        keterangan: keterangan,
+        kewajibanBulanan: parseInt(kewajibanBulanan || '0'),
+        saldoLalu: parseInt(saldoLalu || '0'),
+        tanggalTerakhir: tanggalTerakhir
       });
     }
 

@@ -42,7 +42,8 @@ import {
   HelpCircle,
   Shield,
   User,
-  AlertCircle
+  AlertCircle,
+  FileCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
@@ -648,18 +649,22 @@ const CekKeuanganPublik = () => {
             </div>
           </div>
 
-          {data.tunggakan > 0 && (
-            <div className="bg-red-50 rounded-2xl p-5 border border-red-100 flex items-start gap-4 transition-transform hover:scale-[1.02]">
-              <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0 text-red-600 shadow-sm">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-red-800 uppercase tracking-wider mb-0.5">Tunggakan Sebelumnya</p>
-                <h2 className="text-xl font-black text-red-600">Rp {parseIDR(data.tunggakan).toLocaleString('id-ID')}</h2>
-              </div>
+          <div className={`rounded-2xl p-5 border flex items-start gap-4 transition-transform hover:scale-[1.02] ${data.tunggakan > 0 ? 'bg-orange-50 border-orange-100' : 'bg-emerald-50 border-emerald-100'}`}>
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${data.tunggakan > 0 ? 'bg-orange-100 text-orange-600' : 'bg-emerald-100 text-emerald-600'}`}>
+              <FileCheck className="w-6 h-6" />
             </div>
-          )}
+            <div>
+              <p className={`text-[10px] font-black uppercase tracking-wider mb-0.5 ${data.tunggakan > 0 ? 'text-orange-800' : 'text-emerald-800'}`}>
+                Saldo Syahriah Hari Ini ({new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })})
+              </p>
+              <h2 className={`text-xl font-black ${data.tunggakan > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>
+                {data.tunggakan > 0 ? `Tunggakan: Rp ${parseIDR(data.tunggakan).toLocaleString('id-ID')}` : `Titipan: Rp ${Math.abs(parseIDR(data.tunggakan)).toLocaleString('id-ID')}`}
+              </h2>
+            </div>
+          </div>
 
+          {/* Conditional Red Alarm for heavy arrears if any, or just keep it simple as above */}
+          
           {/* Transaction History Section */}
           <div className="pt-2">
             <div className="flex items-center gap-2 mb-3 px-1">
