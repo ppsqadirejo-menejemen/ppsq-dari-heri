@@ -192,6 +192,29 @@ async function sendFinanceNotification(params: {
   msg += `Nama: ${namaSantri}\n`;
   msg += `Bin/Binti: ${namaAyah}\n`;
   
+  if (type === 'AutomatedMonthlyBilling') {
+    const prevBal = saldoLalu || 0;
+    const totalDue = prevBal + (amount || 0);
+    const prevTypeLabel = prevBal > 0 ? 'Tunggakan' : prevBal < 0 ? 'Titipan (Kredit)' : 'Lunas';
+    
+    msg = `*PEMBERITAHUAN TAGIHAN SYAHRIAH*\n\n`;
+    msg += `Assalamu'alaikum Wr. Wb. Bapak/Ibu Wali Santri dari:\n`;
+    msg += `Nama: ${namaSantri}\n`;
+    msg += `Bin/Binti: ${namaAyah}\n\n`;
+    msg += `Berikut kami sampaikan rincian tagihan Syahriah bulan ${bulan} ${tahun || ''}:\n`;
+    msg += `-----------------------------------------\n`;
+    msg += `Saldo Bulan Lalu: Rp ${Math.abs(prevBal).toLocaleString('id-ID')} (${prevTypeLabel})\n`;
+    msg += `Kewajiban Bulan Ini: Rp ${amount.toLocaleString('id-ID')}\n`;
+    msg += `-----------------------------------------\n`;
+    msg += `*TOTAL TAGIHAN: Rp ${totalDue.toLocaleString('id-ID')}*\n`;
+    msg += `-----------------------------------------\n`;
+    msg += `\nMohon untuk segera melakukan pembayaran Syahriah tepat waktu.\n`;
+    msg += `Rincian lengkap Keuangan Santri:\n${cekKeuanganUrl}\n\n`;
+    msg += `Pesan dikirim otomatis oleh sistem, jika sudah membayar mohon abaikan pesan ini. Terima kasih.`;
+    
+    return await sendWhatsApp(phone, msg);
+  }
+
   const isSyahriah = type.toLowerCase().includes('syahriah');
   if (isSyahriah && bulan) {
     // Exact format requested by user for Syahriah
@@ -994,6 +1017,7 @@ app.post("/api/setup-database", async (req, res) => {
       { name: 'master_tarif', headers: ['kategori_id', 'nama_jenjang', 'nominal', 'keterangan'] },
       { name: 'log_aktivitas', headers: ['Tanggal', 'User', 'Aksi', 'Keterangan'] },
       { name: 'settings_finance', headers: ['Key', 'Value'] },
+      { name: 'log_penagihan', headers: ['Bulan', 'Tahun', 'Tanggal Kirim', 'Total Pesan', 'Admin'] },
       { name: 'Pelanggaran', headers: ['Timestamp', 'Santri ID', 'Nama Santri', 'Tanggal', 'Jenis Pelanggaran', 'Tindakan', 'Pencatat'] },
       { name: 'Tahfidz', headers: ['Timestamp', 'Santri ID', 'Nama Santri', 'Tanggal', 'Surah/Juz', 'Nilai/Keterangan', 'Penyimak'] },
     ];
@@ -1604,6 +1628,146 @@ app.post("/api/settings/finance/update", async (req, res) => {
     }
     res.json({ success: true });
   } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper for parsing currency strings in server
+const parseCurrency = (val: any): number => {
+  if (val === undefined || val === null || val === '') return 0;
+  if (typeof val === 'number') return val;
+  const strVal = String(val);
+  const isNegative = strVal.startsWith('-');
+  const num = parseInt(strVal.replace(/\D/g, ''), 10) || 0;
+  return isNegative ? -num : num;
+};
+
+// Automated Billing Cron Endpoint
+app.get("/api/cron/auto-billing", async (req, res) => {
+  console.log("Cron [Auto Billing]: Script triggered at", new Date().toLocaleString());
+  
+  try {
+    const auth = getGoogleAuth();
+    if (!auth) throw new Error("Google Auth not configured");
+    const spreadsheetId = process.env.GOOGLE_SHEET_ID!;
+
+    // 1. Get Settings
+    const financeSettingsRaw = await getSheetData('settings_finance!A2:B100') || [];
+    const fSettings: any = {};
+    financeSettingsRaw.forEach((row: any) => fSettings[row[0]] = row[1]);
+
+    const isBillingActive = fSettings.billing_status === 'Active';
+    const billingDay = parseInt(fSettings.billing_day);
+    const billingHour = parseInt(fSettings.billing_hour);
+    const billingMinute = parseInt(fSettings.billing_minute || '0');
+
+    if (!isBillingActive) {
+      console.log("Cron [Auto Billing]: Status is inactive. Skipping.");
+      return res.json({ message: "Billing automation is disabled." });
+    }
+
+    const now = new Date();
+    const currentDay = now.getDate();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    // We check if it's the right day and hour. 
+    // Since this might run every 15-60 mins, we check if we are within the target hour window.
+    const isTargetDay = currentDay === billingDay;
+    const isTargetHour = currentHour === billingHour;
+
+    if (!isTargetDay || !isTargetHour) {
+      console.log(`Cron [Auto Billing]: Not scheduled time yet. (Scheduled: Day ${billingDay} Hr ${billingHour}, Current: Day ${currentDay} Hr ${currentHour})`);
+      return res.json({ message: "Not scheduled time yet." });
+    }
+
+    const currentMonthName = now.toLocaleString('id-ID', { month: 'long' });
+    const currentYear = now.getFullYear();
+
+    // 2. Check log_penagihan to prevent duplicate send for this month
+    const logData = await getSheetData('log_penagihan!A2:B1000') || [];
+    const alreadySent = logData.some((row: any) => row[0] === currentMonthName && parseInt(row[1]) === currentYear);
+
+    if (alreadySent) {
+      console.log(`Cron [Auto Billing]: Already sent for ${currentMonthName} ${currentYear}. Skipping.`);
+      return res.json({ message: `Already sent for ${currentMonthName} ${currentYear}.` });
+    }
+
+    // 3. Fetch Data
+    const [santriDataFull, financeDataFull, tariffsData] = await Promise.all([
+      getSheetData('Santri!A2:AF10000'),
+      getSheetData('Syahriah!A2:M20000'),
+      getSheetData('master_tarif!A2:D100')
+    ]);
+
+    if (!santriDataFull) return res.json({ error: "No student data found" });
+
+    const activeSantri = santriDataFull.filter((s: any) => s[26] === 'Aktif');
+    const tariffs: any = {};
+    if (tariffsData) {
+      tariffsData.forEach((t: any) => tariffs[t[0]] = parseCurrency(t[2]));
+    }
+
+    let successCount = 0;
+    
+    // 4. Process each student
+    for (const santri of activeSantri) {
+      const sId = santri[3];
+      const namaSantri = santri[2];
+      const namaAyah = santri[13];
+      const phone = santri[27];
+      const kategori = santri[31];
+      
+      if (!phone) continue;
+
+      // Find latest finance record for this santri
+      const sFinanceRecords = (financeDataFull || []).filter((f: any) => f[1] === sId);
+      const sFinance = sFinanceRecords.sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime())[0];
+
+      const saldoLaluRaw = sFinance ? parseCurrency(sFinance[9]) : 0; 
+      const titipanLaluRaw = sFinance ? parseCurrency(sFinance[8]) : 0; 
+      
+      const kewajibanBulanan = tariffs[kategori] || parseCurrency(fSettings.monthly_syahriah_fee || '0');
+      
+      const wasSent = await sendFinanceNotification({
+        santriId: sId,
+        namaSantri,
+        namaAyah,
+        phone,
+        type: 'AutomatedMonthlyBilling',
+        amount: kewajibanBulanan,
+        bulan: currentMonthName,
+        tahun: currentYear.toString(),
+        saldoLalu: saldoLaluRaw - titipanLaluRaw, // Combine previous debt and credit
+        tanggalTerakhir: sFinance ? sFinance[0] : ''
+      });
+
+      if (wasSent) successCount++;
+      
+      // Delay to respect Fonnte/WhatsApp limits
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    // 5. Finalize Log
+    await appendToSheet('log_penagihan!A2', [[
+      currentMonthName,
+      currentYear,
+      now.toISOString(),
+      successCount,
+      'System Automation'
+    ]]);
+
+    await appendToSheet('log_aktivitas!A2', [[
+      now.toLocaleString('id-ID'),
+      'System',
+      'Penagihan Otomatis',
+      `Berhasil mengirim tagihan bulan ${currentMonthName} ke ${successCount} wali santri.`
+    ]]);
+
+    res.json({ success: true, totalSent: successCount });
+
+  } catch (error: any) {
+    console.error("Cron [Auto Billing] Failed:", error);
     res.status(500).json({ error: error.message });
   }
 });

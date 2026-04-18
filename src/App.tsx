@@ -43,7 +43,11 @@ import {
   Shield,
   User,
   AlertCircle,
-  FileCheck
+  FileCheck,
+  Zap,
+  Globe,
+  Database,
+  Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
@@ -763,6 +767,14 @@ export default function App() {
 
 function MainApp({ user, setUser, isSidebarOpen, setIsSidebarOpen, settings, financeSettings }: any) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/syahriah')) setOpenGroup('finance');
+    else if (location.pathname.startsWith('/settings') || location.pathname.startsWith('/tarif') || location.pathname.startsWith('/pengaturan')) setOpenGroup('settings');
+  }, [location.pathname]);
+
   const appName = settings.app_name || "PPSQ";
   const appSlogan = settings.app_slogan || "Management System";
 
@@ -847,6 +859,8 @@ function MainApp({ user, setUser, isSidebarOpen, setIsSidebarOpen, settings, fin
                     label="KEUANGAN" 
                     icon={Wallet} 
                     activePaths={['/syahriah']}
+                    isOpen={openGroup === 'finance'}
+                    onToggle={() => setOpenGroup(openGroup === 'finance' ? null : 'finance')}
                   >
                     <SidebarLink to="/syahriah/bulanan" label="Input Syahriyah Bulanan" isSubmenu onClick={() => setIsSidebarOpen(false)} />
                     <SidebarLink to="/syahriah/harian" label="Titipan Harian" isSubmenu onClick={() => setIsSidebarOpen(false)} />
@@ -859,11 +873,21 @@ function MainApp({ user, setUser, isSidebarOpen, setIsSidebarOpen, settings, fin
                   <SidebarLink to="/academic" icon={GraduationCap} label="Akademik" onClick={() => setIsSidebarOpen(false)} />
                   <SidebarLink to="/gallery" icon={ImageIcon} label="Galeri Foto" onClick={() => setIsSidebarOpen(false)} />
                   <SidebarLink to="/logs" icon={History} label="Log Aktivitas" onClick={() => setIsSidebarOpen(false)} />
+                  
                   {user.role === 'admin' || user.role === 'superadmin' ? (
-                    <>
-                      <SidebarLink to="/tarif" icon={Layers} label="Tarif & Jenjang" onClick={() => setIsSidebarOpen(false)} />
-                      <SidebarLink to="/settings" icon={Settings} label="Pengaturan" onClick={() => setIsSidebarOpen(false)} />
-                    </>
+                    <SidebarGroup 
+                      label="Pengaturan" 
+                      icon={Settings} 
+                      activePaths={['/settings', '/tarif', '/pengaturan']}
+                      isOpen={openGroup === 'settings'}
+                      onToggle={() => setOpenGroup(openGroup === 'settings' ? null : 'settings')}
+                    >
+                      <SidebarLink to="/settings/profile" icon={Globe} label="Profil & Identitas" isSubmenu onClick={() => setIsSidebarOpen(false)} />
+                      <SidebarLink to="/tarif" icon={Layers} label="Tarif & Jenjang" isSubmenu onClick={() => setIsSidebarOpen(false)} />
+                      <SidebarLink to="/settings/automation" icon={Zap} label="Otomasi Tagihan" isSubmenu onClick={() => setIsSidebarOpen(false)} />
+                      <SidebarLink to="/settings/users" icon={Users} label="Manajemen Akses" isSubmenu onClick={() => setIsSidebarOpen(false)} />
+                      <SidebarLink to="/settings/setup" icon={Database} label="Setup Database" isSubmenu onClick={() => setIsSidebarOpen(false)} />
+                    </SidebarGroup>
                   ) : null}
                   
                   <div className="my-4 border-t border-slate-100"></div>
@@ -904,6 +928,8 @@ function MainApp({ user, setUser, isSidebarOpen, setIsSidebarOpen, settings, fin
                   <Route path="/broadcast" element={<BulkWhatsApp user={user} />} />
                   <Route path="/tarif" element={<ManajemenTarif user={user} />} />
                   <Route path="/settings" element={<SettingsManagement user={user} />} />
+                  <Route path="/settings/:subtab" element={<SettingsManagement user={user} />} />
+                  <Route path="/pengaturan/:subtab" element={<SettingsManagement user={user} />} />
                 </>
               ) : (
                 <>
@@ -921,7 +947,7 @@ function MainApp({ user, setUser, isSidebarOpen, setIsSidebarOpen, settings, fin
 
 const SidebarLink = ({ to, icon: Icon, label, onClick, isSubmenu }: any) => {
   const location = useLocation();
-  const isActive = location.pathname === to;
+  const isActive = location.pathname === to || (to === '/settings/profile' && location.pathname === '/settings');
 
   return (
     <Link 
@@ -931,40 +957,43 @@ const SidebarLink = ({ to, icon: Icon, label, onClick, isSubmenu }: any) => {
         isActive 
           ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' 
           : 'text-slate-600 hover:bg-slate-50 hover:text-emerald-600'
-      } ${isSubmenu ? 'ml-9 text-xs py-2' : ''}`}
+      } ${isSubmenu ? 'ml-6 text-xs py-2' : ''}`}
     >
-      {Icon && <Icon className={`${isSubmenu ? 'w-4 h-4' : 'w-5 h-5'}`} />}
-      {label}
+      <div className="flex items-center gap-3 w-full">
+        {Icon && <Icon className={`${isSubmenu ? 'w-4 h-4' : 'w-5 h-5'} ${isActive ? 'text-white' : 'text-emerald-500/70'}`} />}
+        <span className="truncate">{label}</span>
+      </div>
     </Link>
   );
 };
 
-const SidebarGroup = ({ label, icon: Icon, children, activePaths }: { label: string; icon: any; children: React.ReactNode; activePaths: string[] }) => {
+const SidebarGroup = ({ label, icon: Icon, children, activePaths, isOpen, onToggle }: any) => {
   const location = useLocation();
-  const [isOpen, setIsOpen] = useState(activePaths.some(path => location.pathname.startsWith(path)));
+  const isCurrentlyActive = activePaths.some(path => location.pathname.startsWith(path));
 
   return (
     <div className="space-y-1">
       <button 
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={onToggle}
         className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
-          activePaths.some(path => location.pathname.startsWith(path))
-            ? 'text-emerald-600 bg-emerald-50/50' 
+          isCurrentlyActive
+            ? 'text-emerald-700 bg-emerald-50' 
             : 'text-slate-600 hover:bg-slate-50 hover:text-emerald-600'
         }`}
       >
         <div className="flex items-center gap-3">
-          <Icon className="w-5 h-5" />
-          <span>{label}</span>
+          <Icon className={`w-5 h-5 ${isCurrentlyActive ? 'text-emerald-600' : 'text-slate-400'}`} />
+          <span className="text-sm font-bold truncate">{label}</span>
         </div>
-        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''} ${isCurrentlyActive ? 'text-emerald-600' : 'text-slate-400'}`} />
       </button>
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div 
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
             className="overflow-hidden space-y-1"
           >
             {children}
@@ -3306,6 +3335,9 @@ const ManajemenTarif = ({ user }: { user: any }) => {
 };
 
 const SettingsManagement = ({ user }: { user: any }) => {
+  const { subtab } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [settings, setSettings] = useState<any>({});
   const [localSettings, setLocalSettings] = useState<any>({});
   const [users, setUsers] = useState<any[]>([]);
@@ -3313,11 +3345,20 @@ const SettingsManagement = ({ user }: { user: any }) => {
   const [localFinanceSettings, setLocalFinanceSettings] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'finance'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'finance' | 'automation' | 'setup'>('general');
+
+  useEffect(() => {
+    if (subtab === 'profile' || subtab === 'general') setActiveTab('general');
+    else if (subtab === 'automation') setActiveTab('automation');
+    else if (subtab === 'users') setActiveTab('users');
+    else if (subtab === 'setup') setActiveTab('setup');
+    else if (subtab === 'finance') setActiveTab('finance');
+  }, [subtab]);
   const [newUser, setNewUser] = useState({ name: '', username: '', password: '', role: 'user' });
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
   const [alertInfo, setAlertInfo] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [spreadsheetUrl, setSpreadsheetUrl] = useState<string | null>(null);
+  const [setupLoading, setSetupLoading] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -3415,7 +3456,14 @@ const SettingsManagement = ({ user }: { user: any }) => {
   const saveFinanceSettings = async () => {
     setSaving(true);
     try {
-      const keysToSave = ['nominal_tabungan_ziarah', 'estimasi_biaya_ziarah'];
+      const keysToSave = [
+        'nominal_tabungan_ziarah', 
+        'estimasi_biaya_ziarah', 
+        'billing_day', 
+        'billing_hour', 
+        'billing_minute', 
+        'billing_status'
+      ];
       let changed = false;
 
       for (const key of keysToSave) {
@@ -3430,7 +3478,7 @@ const SettingsManagement = ({ user }: { user: any }) => {
 
       if (changed) {
         setFinanceSettings({ ...localFinanceSettings });
-        setAlertInfo({ message: 'Konfigurasi Tabungan Syahriyah berhasil disimpan!', type: 'success' });
+        setAlertInfo({ message: 'Konfigurasi berhasil disimpan!', type: 'success' });
       } else {
         setAlertInfo({ message: 'Tidak ada perubahan untuk disimpan.', type: 'error' });
       }
@@ -3442,404 +3490,549 @@ const SettingsManagement = ({ user }: { user: any }) => {
     }
   };
 
+  const runSetup = async () => {
+    setSetupLoading(true);
+    try {
+      await axios.post('/api/setup-database');
+      setAlertInfo({ message: 'Database Setup Berhasil!', type: 'success' });
+    } catch (err: any) {
+      setAlertInfo({ message: `Gagal Setup: ${err.message}`, type: 'error' });
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
   if (loading) return <div className="p-8 text-center text-slate-400">Memuat pengaturan...</div>;
 
+  // Redirect to profile if on base /settings or /pengaturan path
+  if (!subtab && (location.pathname === '/settings' || location.pathname === '/pengaturan')) {
+    return <Navigate to="/settings/profile" replace />;
+  }
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div className="flex gap-4 border-b border-slate-200 pb-4">
-        <button 
-          onClick={() => setActiveTab('general')}
-          className={`px-6 py-2 rounded-xl font-bold transition-all ${activeTab === 'general' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100'}`}
-        >
-          Logo & Nama
-        </button>
-        {user.role === 'superadmin' && (
-          <button 
-            onClick={() => setActiveTab('users')}
-            className={`px-6 py-2 rounded-xl font-bold transition-all ${activeTab === 'users' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100'}`}
-          >
-            Kusus Super Admin
-          </button>
-        )}
-        {(user.role === 'admin' || user.role === 'superadmin') && (
-          <button 
-            onClick={() => setActiveTab('finance')}
-            className={`px-6 py-2 rounded-xl font-bold transition-all ${activeTab === 'finance' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100'}`}
-          >
-            Konfigurasi Tabungan Syahriyah
-          </button>
-        )}
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* Dynamic Header */}
+      <div className="flex items-center justify-between bg-white px-8 py-6 rounded-3xl shadow-sm border border-slate-100">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-emerald-100 rounded-2xl">
+            {activeTab === 'general' && <Globe className="w-6 h-6 text-emerald-600" />}
+            {activeTab === 'automation' && <Zap className="w-6 h-6 text-emerald-600" />}
+            {activeTab === 'users' && <Users className="w-6 h-6 text-emerald-600" />}
+            {activeTab === 'setup' && <Database className="w-6 h-6 text-emerald-600" />}
+            {activeTab === 'finance' && <Wallet className="w-6 h-6 text-emerald-600" />}
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight">
+              {activeTab === 'general' && 'Profil & Identitas'}
+              {activeTab === 'automation' && 'Otomasi Tagihan'}
+              {activeTab === 'users' && 'Manajemen Akses'}
+              {activeTab === 'setup' && 'Setup Database'}
+              {activeTab === 'finance' && 'Tarif & Keuangan'}
+            </h1>
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mt-0.5">
+              <span>Pengaturan</span>
+              <ChevronRight className="w-3 h-3" />
+              <span className="text-emerald-500">
+                {activeTab === 'general' && 'Profil'}
+                {activeTab === 'automation' && 'Otomasi'}
+                {activeTab === 'users' && 'Akses'}
+                {activeTab === 'setup' && 'Database'}
+                {activeTab === 'finance' && 'Keuangan'}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <div className="hidden md:block text-right">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Status Sistem</p>
+            <p className="text-xs font-bold text-emerald-600 mt-1 flex items-center justify-end gap-1.5">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+              Online & Terhubung
+            </p>
+          </div>
+        </div>
       </div>
 
-      {activeTab === 'general' ? (
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
-          <div>
-            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <Settings className="text-emerald-600" /> Pengaturan Logo
-            </h3>
-            <div className="flex items-center gap-8">
-              <Logo className="w-32 h-32" url={localSettings.logo_url} />
-              <div className="flex-1 space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">URL Logo (Image URL)</label>
-                  <input 
-                    type="text" 
-                    value={localSettings.logo_url || ''}
-                    onChange={(e) => setLocalSettings({ ...localSettings, logo_url: e.target.value })}
-                    placeholder="https://example.com/logo.png"
-                    className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1 italic">* Masukkan URL gambar logo pondok Anda.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-8 border-t border-slate-100">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Nama Aplikasi</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Nama Utama</label>
-                <input 
-                  type="text" 
-                  value={localSettings.app_name || ''}
-                  onChange={(e) => setLocalSettings({ ...localSettings, app_name: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Slogan / Deskripsi</label>
-                <input 
-                  type="text" 
-                  value={localSettings.app_slogan || ''}
-                  onChange={(e) => setLocalSettings({ ...localSettings, app_slogan: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-8 border-t border-slate-100">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Domain Publik (URL Produksi)</h3>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">URL Aplikasi</label>
-              <input 
-                type="text" 
-                value={localSettings.production_url || ''}
-                onChange={(e) => setLocalSettings({ ...localSettings, production_url: e.target.value })}
-                placeholder="https://ppsq-app.vercel.app"
-                className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-              <p className="text-[10px] text-slate-400 mt-1 italic">* Masukkan URL publik aplikasi Anda agar QR Code bisa di-scan siapa saja tanpa error 403.</p>
-            </div>
-          </div>
-
-          <div className="pt-8 border-t border-slate-100">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Teks Berjalan (Marquee)</h3>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Isi Teks</label>
-              <textarea 
-                value={localSettings.marquee_text || ''}
-                onChange={(e) => setLocalSettings({ ...localSettings, marquee_text: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                placeholder="Selamat Datang..."
-              />
-            </div>
-          </div>
-
-          <div className="pt-8 border-t border-slate-100">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Integrasi Cloudinary</h3>
-            <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
-              <p className="text-sm text-emerald-800 font-medium">
-                Penyimpanan Berkas Aktif: <span className="font-bold">Cloudinary</span>
-              </p>
-              <p className="text-xs text-emerald-600 mt-1">
-                Foto wajah, dokumen KK, dan dokumentasi acara secara otomatis tersimpan di Cloudinary.
-                Konfigurasi dilakukan melalui Environment Variables sistem.
-              </p>
-            </div>
-          </div>
-
-          <div className="pt-8 border-t border-slate-100">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Pengaturan Syahriyah</h3>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Nominal Syahriyah Bulanan (Rp)</label>
-              <input 
-                type="text" 
-                value={formatNumber(localSettings.monthly_syahriah_fee || '')}
-                onChange={(e) => setLocalSettings({ ...localSettings, monthly_syahriah_fee: parseNumber(e.target.value) })}
-                className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                placeholder="Contoh: 200.000"
-              />
-              <p className="text-[10px] text-slate-400 mt-1 italic">* Nominal standar tagihan syahriyah per bulan.</p>
-            </div>
-          </div>
-
-          <div className="pt-8 flex justify-end">
-            <button 
-              onClick={saveSettings}
-              disabled={saving}
-              className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all disabled:opacity-50"
+      <div className="flex flex-col gap-8">
+        {/* Content Area */}
+        <div className="flex-1 min-w-0">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
             >
-              {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
-            </button>
-          </div>
-        </div>
-      ) : activeTab === 'finance' ? (
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
-          <div>
-            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <Wallet className="text-emerald-600" /> Konfigurasi Tabungan Syahriyah
-            </h3>
-            <p className="text-sm text-slate-500 mb-6">
-              Atur parameter pemotongan otomatis Syahriyah untuk tabungan ziarah massal santri.
-            </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                    Nominal Tabungan Ziarah (Bulanan)
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">Rp</span>
-                    <input 
-                      type="text" 
-                      value={formatNumber(localFinanceSettings.nominal_tabungan_ziarah || '')}
-                      onChange={(e) => setLocalFinanceSettings({ ...localFinanceSettings, nominal_tabungan_ziarah: parseNumber(e.target.value) })}
-                      className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700"
-                      placeholder="Contoh: 100.000"
+              {activeTab === 'general' ? (
+                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold text-slate-800">Profil & Identitas</h2>
+                      <p className="text-sm text-slate-500">Sesuaikan logo, nama, dan identitas visual aplikasi.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col md:flex-row items-center gap-8 py-4 px-6 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                    <Logo className="w-32 h-32" url={localSettings.logo_url} />
+                    <div className="flex-1 space-y-4 w-full">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">URL Logo Pondok</label>
+                        <input 
+                          type="text" 
+                          value={localSettings.logo_url || ''}
+                          onChange={(e) => setLocalSettings({ ...localSettings, logo_url: e.target.value })}
+                          placeholder="https://example.com/logo.png"
+                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-2 italic">* Disarankan menggunakan gambar dengan latar transparan (PNG).</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Nama Pesantren / Lembaga</label>
+                        <input 
+                          type="text" 
+                          value={localSettings.app_name || ''}
+                          onChange={(e) => setLocalSettings({ ...localSettings, app_name: e.target.value })}
+                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">URL Domain Utama</label>
+                        <input 
+                          type="text" 
+                          value={localSettings.production_url || ''}
+                          onChange={(e) => setLocalSettings({ ...localSettings, production_url: e.target.value })}
+                          placeholder="https://ppsq.vercel.app"
+                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Slogan Aplikasi</label>
+                        <input 
+                          type="text" 
+                          value={localSettings.app_slogan || ''}
+                          onChange={(e) => setLocalSettings({ ...localSettings, app_slogan: e.target.value })}
+                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Nominal Standar Syahriah</label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">Rp</span>
+                          <input 
+                            type="text" 
+                            value={formatNumber(localSettings.monthly_syahriah_fee || '')}
+                            onChange={(e) => setLocalSettings({ ...localSettings, monthly_syahriah_fee: parseNumber(e.target.value) })}
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Pengumuman Berjalan (Marquee)</label>
+                    <textarea 
+                      value={localSettings.marquee_text || ''}
+                      onChange={(e) => setLocalSettings({ ...localSettings, marquee_text: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
+                      placeholder="Masukkan pengumuman penting di sini..."
                     />
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-2 italic">
-                    * Jumlah yang akan dipotong dari pembayaran Syahriyah setiap bulan untuk ditabung.
-                  </p>
-                </div>
-              </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                    Estimasi Biaya Ziarah Massal
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">Rp</span>
-                    <input 
-                      type="text" 
-                      value={formatNumber(localFinanceSettings.estimasi_biaya_ziarah || '')}
-                      onChange={(e) => setLocalFinanceSettings({ ...localFinanceSettings, estimasi_biaya_ziarah: parseNumber(e.target.value) })}
-                      className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700"
-                      placeholder="Contoh: 2.000.000"
-                    />
+                  <div className="pt-6 border-t border-slate-100 flex justify-end">
+                    <button 
+                      onClick={saveSettings}
+                      disabled={saving}
+                      className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all disabled:opacity-50"
+                    >
+                      {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
+                    </button>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-2 italic">
-                    * Total target biaya keberangkatan ziarah per santri.
-                  </p>
                 </div>
-              </div>
-            </div>
+              ) : activeTab === 'finance' ? (
+                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Tarif & Keuangan</h2>
+                    <p className="text-sm text-slate-500">Atur parameter pemotongan otomatis Syahriyah untuk tabungan ziarah.</p>
+                  </div>
 
-            <div className="mt-8 p-4 bg-blue-50 rounded-2xl border border-blue-100">
-              <div className="flex gap-3">
-                <div className="p-2 bg-blue-100 rounded-xl">
-                  <TrendingUp className="w-5 h-5 text-blue-600" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                      <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider text-center">Nominal Tabungan Ziarah</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">Rp</span>
+                        <input 
+                          type="text" 
+                          value={formatNumber(localFinanceSettings.nominal_tabungan_ziarah || '')}
+                          onChange={(e) => setLocalFinanceSettings({ ...localFinanceSettings, nominal_tabungan_ziarah: parseNumber(e.target.value) })}
+                          className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-xl text-emerald-700 text-center"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                      <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider text-center">Estimasi Total Biaya Ziarah</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">Rp</span>
+                        <input 
+                          type="text" 
+                          value={formatNumber(localFinanceSettings.estimasi_biaya_ziarah || '')}
+                          onChange={(e) => setLocalFinanceSettings({ ...localFinanceSettings, estimasi_biaya_ziarah: parseNumber(e.target.value) })}
+                          className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-xl text-slate-700 text-center"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-blue-50/50 rounded-3xl border border-blue-100 flex gap-4">
+                    <div className="p-3 bg-blue-100 rounded-2xl h-fit">
+                      <Info className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-blue-800">Kalkulasi Waktu Target</h4>
+                      <p className="text-sm text-blue-700/80 mt-1 leading-relaxed">
+                        Dengan menabung <span className="font-bold">Rp {formatNumber(localFinanceSettings.nominal_tabungan_ziarah || '0')}</span> per bulan, santri akan melunasi biaya ziarah 
+                        <span className="font-bold"> Rp {formatNumber(localFinanceSettings.estimasi_biaya_ziarah || '0')}</span> hanya dalam waktu 
+                        <span className="px-2 py-0.5 bg-blue-200 text-blue-800 rounded-lg mx-1 font-bold">
+                          {Math.ceil(parseInt(localFinanceSettings.estimasi_biaya_ziarah || '0') / (parseInt(localFinanceSettings.nominal_tabungan_ziarah || '1') || 1))} Bulan
+                        </span>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-6 flex justify-end">
+                    <button 
+                      onClick={saveFinanceSettings}
+                      disabled={saving}
+                      className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-bold shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {saving ? 'Menyimpan...' : <><Save className="w-5 h-5" /> Simpan Konfigurasi</>}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-sm font-bold text-blue-800">Informasi Kalkulasi</h4>
-                  <p className="text-xs text-blue-600 mt-1 leading-relaxed">
-                    Dengan tabungan <span className="font-bold">Rp {formatNumber(localFinanceSettings.nominal_tabungan_ziarah || '0')}</span>/bulan, 
-                    santri akan mencapai target <span className="font-bold">Rp {formatNumber(localFinanceSettings.estimasi_biaya_ziarah || '0')}</span> dalam waktu 
-                    <span className="font-bold"> {Math.ceil(parseInt(localFinanceSettings.estimasi_biaya_ziarah || '0') / (parseInt(localFinanceSettings.nominal_tabungan_ziarah || '1') || 1))} Bulan</span>.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+              ) : activeTab === 'automation' ? (
+                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
+                   <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Otomasi Tagihan WA</h2>
+                    <p className="text-sm text-slate-500">Atur jadwal pengiriman notifikasi tagihan syahriah otomatis ke wali santri.</p>
+                  </div>
 
-          <div className="pt-8 border-t border-slate-100 flex justify-end">
-            <button 
-              onClick={saveFinanceSettings}
-              disabled={saving}
-              className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-bold shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center gap-2"
-            >
-              {saving ? 'Menyimpan...' : <><Save className="w-5 h-5" /> Simpan Konfigurasi</>}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {spreadsheetUrl && user.role === 'superadmin' && (
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
-                <h3 className="text-lg font-bold text-slate-800">Database Utama (Spreadsheet)</h3>
-                <p className="text-sm text-slate-500">Akses langsung ke Google Spreadsheet yang menyimpan seluruh data aplikasi.</p>
-              </div>
-              <a 
-                href={spreadsheetUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-6 py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold hover:bg-emerald-100 transition-colors whitespace-nowrap"
-              >
-                <ExternalLink className="w-5 h-5" />
-                Buka Spreadsheet
-              </a>
-            </div>
-          )}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-              <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <Users className="text-emerald-600" /> Tambah User
-            </h3>
-            <form onSubmit={addUser} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Nama Lengkap</label>
-                <input 
-                  type="text" 
-                  value={newUser.name}
-                  onChange={(e) => setNewUser({...newUser, name: e.target.value})}
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Username</label>
-                <input 
-                  type="text" 
-                  value={newUser.username}
-                  onChange={(e) => setNewUser({...newUser, username: e.target.value})}
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Password</label>
-                <input 
-                  type="password" 
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({...newUser, password: e.target.value})}
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Role</label>
-                <select 
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({...newUser, role: e.target.value})}
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="user">User (Hanya Lihat)</option>
-                  <option value="admin">Admin (Input & Edit)</option>
-                  <option value="superadmin">Superadmin (Manajemen User)</option>
-                </select>
-              </div>
-              <button className="w-full bg-emerald-600 text-white py-2 rounded-xl font-bold shadow-lg shadow-emerald-100">
-                Tambah User
-              </button>
-            </form>
-          </div>
+                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-6">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <h4 className="font-bold text-slate-800">Status Otomasi</h4>
+                        <p className="text-xs text-slate-500">Aktifkan untuk mulai mengirim tagihan setiap bulan secara otomatis.</p>
+                      </div>
+                      <button 
+                        onClick={() => setLocalFinanceSettings({...localFinanceSettings, billing_status: localFinanceSettings.billing_status === 'Active' ? 'Inactive' : 'Active'})}
+                        className={`w-14 h-8 rounded-full transition-all relative ${localFinanceSettings.billing_status === 'Active' ? 'bg-emerald-600' : 'bg-slate-300'}`}
+                      >
+                        <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-sm transition-all ${localFinanceSettings.billing_status === 'Active' ? 'left-7' : 'left-1'}`} />
+                      </button>
+                    </div>
 
-          <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Daftar User</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                    <th className="px-4 py-3">Nama</th>
-                    <th className="px-4 py-3">Username</th>
-                    <th className="px-4 py-3">Role</th>
-                    <th className="px-4 py-3">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {users.map((u, i) => (
-                    <tr key={i} className="text-sm">
-                      <td className="px-4 py-3 font-bold text-slate-700">{u[0]}</td>
-                      <td className="px-4 py-3 text-slate-600">{u[1]}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          u[3] === 'superadmin' ? 'bg-purple-100 text-purple-700' : 
-                          u[3] === 'admin' ? 'bg-emerald-100 text-emerald-700' : 
-                          'bg-slate-100 text-slate-600'
-                        }`}>
-                          {u[3]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <button 
-                          onClick={() => {
-                            if (u[3] === 'superadmin') {
-                              setAlertInfo({ message: 'Superadmin tidak bisa dihapus', type: 'error' });
-                            } else {
-                              setDeletingUser(u[1]);
-                            }
-                          }}
-                          className="text-red-500 hover:text-red-700 font-bold text-xs"
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-slate-200">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Setiap Tanggal</label>
+                        <select 
+                          value={localFinanceSettings.billing_day || '10'}
+                          onChange={(e) => setLocalFinanceSettings({...localFinanceSettings, billing_day: e.target.value})}
+                          className="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
                         >
-                          Hapus
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          </div>
+                          {Array.from({length: 28}, (_, i) => i + 1).map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Jam</label>
+                          <select 
+                            value={localFinanceSettings.billing_hour || '09'}
+                            onChange={(e) => setLocalFinanceSettings({...localFinanceSettings, billing_hour: e.target.value})}
+                            className="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
+                          >
+                            {Array.from({length: 24}, (_, i) => (i < 10 ? '0' + i : i)).map(h => (
+                              <option key={h} value={h}>{h}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Menit</label>
+                          <select 
+                            value={localFinanceSettings.billing_minute || '00'}
+                            onChange={(e) => setLocalFinanceSettings({...localFinanceSettings, billing_minute: e.target.value})}
+                            className="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
+                          >
+                            {Array.from({length: 60}, (_, i) => (i < 10 ? '0' + i : i.toString())).map(m => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
 
-          {/* Custom Modals for Settings */}
-          <AnimatePresence>
-            {deletingUser && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                <motion.div 
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.9, opacity: 0 }}
-                  className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl"
-                >
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Trash2 className="text-red-600 w-8 h-8" />
+                    <div className="p-4 bg-emerald-50 rounded-2xl flex gap-3 text-emerald-800">
+                      <Zap className="w-5 h-5 flex-shrink-0" />
+                      <p className="text-xs leading-relaxed font-medium">
+                        * Penagihan akan dikirimkan otomatis ke seluruh wali santri aktif pada tanggal <span className="font-bold">{localFinanceSettings.billing_day || '10'}</span> pukul <span className="font-bold">{localFinanceSettings.billing_hour || '09'}:{localFinanceSettings.billing_minute || '00'}</span> WIB. Pastikan HP admin Fonnte dalam kondisi aktif dan terhubung internet.
+                      </p>
+                    </div>
                   </div>
-                  <h3 className="text-xl font-bold text-slate-800 text-center mb-2">Hapus User</h3>
-                  <p className="text-slate-500 text-center mb-8">Apakah Anda yakin ingin menghapus user <strong>{deletingUser}</strong>?</p>
-                  <div className="flex gap-4">
-                    <button 
-                      onClick={() => setDeletingUser(null)}
-                      className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all"
-                    >
-                      Batal
-                    </button>
-                    <button 
-                      onClick={() => deleteUser(deletingUser)}
-                      className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg shadow-red-100 transition-all"
-                    >
-                      Ya, Hapus
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            )}
 
-            {alertInfo && (
-              <div className="fixed bottom-8 right-8 z-50">
-                <motion.div 
-                  initial={{ y: 50, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: 50, opacity: 0 }}
-                  className={`px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 font-bold text-white ${alertInfo.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'}`}
-                >
-                  {alertInfo.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
-                  {alertInfo.message}
-                  <button onClick={() => setAlertInfo(null)} className="ml-4 hover:opacity-70">
-                    <X className="w-4 h-4" />
-                  </button>
-                </motion.div>
-              </div>
-            )}
+                  <div className="pt-6 flex justify-end">
+                    <button 
+                      onClick={saveFinanceSettings}
+                      disabled={saving}
+                      className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-bold shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {saving ? 'Menyimpan...' : <><Save className="w-5 h-5" /> Simpan Jadwal</>}
+                    </button>
+                  </div>
+                </div>
+              ) : activeTab === 'setup' ? (
+                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Setup Database</h2>
+                    <p className="text-sm text-slate-500">Inisialisasi atau perbaiki struktur Google Sheets secara otomatis.</p>
+                  </div>
+
+                  <div className="p-8 bg-amber-50 rounded-3xl border border-amber-100 space-y-4">
+                    <div className="flex gap-4">
+                      <div className="p-3 bg-amber-100 rounded-2xl h-fit">
+                        <AlertCircle className="w-6 h-6 text-amber-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-amber-800">Peringatan Penting</h4>
+                        <p className="text-sm text-amber-700/80 mt-1 leading-relaxed">
+                          Fitur ini akan menambahkan sheet baru yang diperlukan jika belum ada. Data yang sudah ada tidak akan dihapus, namun header kolom akan distandarisasi.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-8 bg-emerald-50 rounded-3xl border border-emerald-100 flex flex-col items-center text-center space-y-4">
+                    <Database className="w-12 h-12 text-emerald-600 mb-2" />
+                    <h3 className="text-xl font-bold text-emerald-900">Konfigurasi Lembar Kerja</h3>
+                    <p className="text-sm text-emerald-700 max-w-md">Klik tombol di bawah untuk menyinkronkan struktur database Google Sheets Anda dengan sistem terbaru.</p>
+                    
+                    <button 
+                      onClick={runSetup}
+                      disabled={setupLoading}
+                      className="mt-4 bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {setupLoading ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          Memproses Setup...
+                        </>
+                      ) : (
+                        <>
+                          <Database className="w-5 h-5" />
+                          Jalankan Inisialisasi Database
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                    <div className="flex items-center justify-between mb-8">
+                      <div>
+                        <h2 className="text-2xl font-bold text-slate-800">Manajemen Akses</h2>
+                        <p className="text-sm text-slate-500">Kelola daftar pengguna dan hak akses aplikasi.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                      <div className="lg:col-span-1 p-6 bg-slate-50 rounded-3xl border border-slate-100 h-fit">
+                        <h3 className="text-md font-bold text-slate-800 mb-4">Tambah User Baru</h3>
+                        <form onSubmit={addUser} className="space-y-4">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 mb-1">Nama Lengkap</label>
+                            <input 
+                              type="text" 
+                              value={newUser.name}
+                              onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 mb-1">Username</label>
+                            <input 
+                              type="text" 
+                              value={newUser.username}
+                              onChange={(e) => setNewUser({...newUser, username: e.target.value})}
+                              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 mb-1">Password</label>
+                            <input 
+                              type="password" 
+                              value={newUser.password}
+                              onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 mb-1">Peran Akses</label>
+                            <select 
+                              value={newUser.role}
+                              onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
+                            >
+                              <option value="user">User (Hanya Lihat)</option>
+                              <option value="admin">Admin (Input Data)</option>
+                              <option value="superadmin">Superadmin (Pengaturan)</option>
+                            </select>
+                          </div>
+                          <button className="w-full bg-emerald-600 text-white py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 mt-2">
+                            Buat Akun
+                          </button>
+                        </form>
+                      </div>
+
+                      <div className="lg:col-span-2 space-y-4">
+                        <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white">
+                          <table className="w-full text-left">
+                            <thead className="bg-slate-50 border-b border-slate-100">
+                              <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                <th className="px-6 py-4">Informasi User</th>
+                                <th className="px-6 py-4">Role</th>
+                                <th className="px-6 py-4 text-right">Aksi</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                              {users.map((u, i) => (
+                                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                  <td className="px-6 py-4">
+                                    <div className="font-bold text-slate-700">{u[0]}</div>
+                                    <div className="text-xs text-slate-400">@{u[1]}</div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${
+                                      u[3] === 'superadmin' ? 'bg-purple-100 text-purple-700' : 
+                                      u[3] === 'admin' ? 'bg-emerald-100 text-emerald-700' : 
+                                      'bg-slate-100 text-slate-600'
+                                    }`}>
+                                      {u[3].toUpperCase()}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                    <button 
+                                      onClick={() => {
+                                        if (u[3] === 'superadmin') {
+                                          setAlertInfo({ message: 'Akun Superadmin utama tidak dapat dihapus.', type: 'error' });
+                                        } else {
+                                          setDeletingUser(u[1]);
+                                        }
+                                      }}
+                                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {spreadsheetUrl && (
+                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6 overflow-hidden relative group">
+                      <div className="absolute top-0 right-0 p-8 text-emerald-50 group-hover:scale-110 transition-transform">
+                        <Database className="w-32 h-32" />
+                      </div>
+                      <div className="relative z-10 text-center md:text-left">
+                        <h3 className="text-xl font-bold text-slate-800 mb-1">Basis Data (Google Sheets)</h3>
+                        <p className="text-sm text-slate-500">Seluruh data tersimpan aman di akun Google Anda.</p>
+                      </div>
+                      <a 
+                        href={spreadsheetUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative z-10 flex items-center gap-2 px-8 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 whitespace-nowrap"
+                      >
+                        <ExternalLink className="w-5 h-5" />
+                        Akses Spreadsheet
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </motion.div>
           </AnimatePresence>
         </div>
-      )}
+
+        {/* Custom Modals for Settings */}
+        <AnimatePresence>
+          {deletingUser && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl"
+              >
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Trash2 className="text-red-600 w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-800 text-center mb-2">Hapus User</h3>
+                <p className="text-slate-500 text-center mb-8">Apakah Anda yakin ingin menghapus user <strong>{deletingUser}</strong>?</p>
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => setDeletingUser(null)}
+                    className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    onClick={() => deleteUser(deletingUser)}
+                    className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg shadow-red-100 transition-all"
+                  >
+                    Ya, Hapus
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {alertInfo && (
+            <div className="fixed bottom-8 right-8 z-50">
+              <motion.div 
+                initial={{ y: 50, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 50, opacity: 0 }}
+                className={`px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 font-bold text-white ${alertInfo.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'}`}
+              >
+                {alertInfo.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+                {alertInfo.message}
+                <button onClick={() => setAlertInfo(null)} className="ml-4 hover:opacity-70">
+                  <X className="w-4 h-4" />
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };
