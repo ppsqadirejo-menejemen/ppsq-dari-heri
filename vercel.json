@@ -23,15 +23,11 @@
       "dest": "server.ts"
     },
     {
-      "src": "/(.*)",
-      "dest": "/$1",
-      "continue": true
+      "handle": "filesystem"
     },
     {
       "src": "/(.*)",
-      "status": 404,
-      "handle": "filesystem",
-      "dest": "server.ts"
+      "dest": "index.html"
     }
   ]
 }
