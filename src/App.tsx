@@ -612,51 +612,97 @@ const CekKeuanganPublik = () => {
     </div>
   );
 
+  const currentMonthName = new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(new Date());
+  const currentYear = new Date().getFullYear();
+
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 py-12">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 py-8 md:py-12">
+      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 flex flex-col">
         <div className="bg-gradient-to-r from-blue-600 to-emerald-600 p-8 text-center text-white">
           <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
             <User className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-2xl font-extrabold mb-1">{data.namaSantri}</h1>
-          <p className="text-blue-100 font-medium">{data.kelasFormal} • {data.kategori}</p>
+          <h1 className="text-2xl font-extrabold mb-1 tracking-tight">{data.namaSantri}</h1>
+          <p className="text-blue-100 font-medium text-sm">{data.kelasFormal} • {data.kategori}</p>
         </div>
         
-        <div className="p-6 space-y-6">
-          <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 flex items-start gap-4">
-            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0 text-emerald-600">
+        <div className="p-6 space-y-5">
+          {/* Summary Cards */}
+          <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 flex items-start gap-4 transition-transform hover:scale-[1.02]">
+            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0 text-emerald-600 shadow-sm">
               <Wallet className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm font-bold text-emerald-800 mb-1">Total Saldo Titipan (Uang Saku)</p>
+              <p className="text-[10px] font-black text-emerald-800 uppercase tracking-wider mb-0.5">Saldo Titipan (Uang Saku)</p>
               <h2 className="text-2xl font-black text-emerald-600">Rp {parseIDR(data.saldoTitipan).toLocaleString('id-ID')}</h2>
             </div>
           </div>
 
-          <div className="bg-blue-50 rounded-2xl p-5 border border-blue-100 flex items-start gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 text-blue-600">
+          <div className="bg-blue-50 rounded-2xl p-5 border border-blue-100 flex items-start gap-4 transition-transform hover:scale-[1.02]">
+            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 text-blue-600 shadow-sm">
               <FileText className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm font-bold text-blue-800 mb-1">Tagihan Syahriah (Bulan Ini)</p>
+              <p className="text-[10px] font-black text-blue-800 uppercase tracking-wider mb-0.5">Biaya Syahriah Bulanan</p>
               <h2 className="text-xl font-black text-blue-600">Rp {parseIDR(data.tagihanBulanIni).toLocaleString('id-ID')}</h2>
             </div>
           </div>
 
-          <div className={`rounded-2xl p-5 border flex items-start gap-4 ${data.tunggakan > 0 ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${data.tunggakan > 0 ? 'bg-red-100 text-red-600' : 'bg-slate-200 text-slate-500'}`}>
-              <AlertCircle className="w-6 h-6" />
+          {data.tunggakan > 0 && (
+            <div className="bg-red-50 rounded-2xl p-5 border border-red-100 flex items-start gap-4 transition-transform hover:scale-[1.02]">
+              <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0 text-red-600 shadow-sm">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-red-800 uppercase tracking-wider mb-0.5">Tunggakan Sebelumnya</p>
+                <h2 className="text-xl font-black text-red-600">Rp {parseIDR(data.tunggakan).toLocaleString('id-ID')}</h2>
+              </div>
             </div>
-            <div>
-              <p className={`text-sm font-bold mb-1 ${data.tunggakan > 0 ? 'text-red-800' : 'text-slate-600'}`}>Tunggakan Sebelumnya</p>
-              <h2 className={`text-xl font-black ${data.tunggakan > 0 ? 'text-red-600' : 'text-slate-600'}`}>Rp {parseIDR(data.tunggakan).toLocaleString('id-ID')}</h2>
+          )}
+
+          {/* Transaction History Section */}
+          <div className="pt-2">
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Clock className="w-4 h-4 text-slate-400" />
+              <h3 className="text-sm font-bold text-slate-800 tracking-tight">Riwayat Transaksi Terakhir</h3>
+            </div>
+            
+            <div className="space-y-3">
+              {data.history && data.history.length > 0 ? (
+                data.history.map((record: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
+                    <div className="flex gap-3 items-center">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${record.type === 'Masuk' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                        {record.type === 'Masuk' ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-800 line-clamp-1">{record.description}</p>
+                        <p className="text-[10px] text-slate-400 font-medium">{new Date(record.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-sm font-black ${record.type === 'Masuk' ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {record.type === 'Masuk' ? '+' : '-'} Rp {parseIDR(record.amount).toLocaleString('id-ID')}
+                      </p>
+                      <p className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter">{record.type}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-10 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                  <p className="text-xs text-slate-400">Belum ada riwayat transaksi</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
         
-        <div className="bg-slate-50 p-4 text-center border-t border-slate-100">
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Sistem Informasi Manajemen PPSQ</p>
+        <div className="mt-auto bg-slate-50 p-6 text-center border-t border-slate-100">
+          <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+            Data ini sinkron langsung dengan catatan bendahara pondok.<br/>
+            <span className="text-slate-400 italic">Terakhir diperbarui pada: {data.lastSync ? new Date(data.lastSync).toLocaleString('id-ID') : '-'}</span>
+          </p>
+          <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mt-4"></div>
         </div>
       </div>
     </div>

@@ -315,15 +315,26 @@ app.get("/api/public/keuangan/:id", async (req, res) => {
     let kategori = santri[31] || 'Biasa';
     if (kategori === '') kategori = 'Biasa';
 
-    // Calculate allowance (saldo titipan)
+    // Calculate allowance (saldo titipan) and collect history
     const allowanceData = await getSheetData('Allowance!A2:J') || [];
     let saldoTitipan = 0;
+    const history: any[] = [];
+    
     allowanceData.filter((a: any) => a[1] === decodedId).forEach((curr: any) => {
-      let isNegative = String(curr.length > 6 ? curr[5] : curr[2]).startsWith('-');
-      let rawAmount = parseInt(String(curr.length > 6 ? curr[5] : curr[2]).replace(/\D/g, ''), 10) || 0;
+      const isNegative = String(curr.length > 6 ? curr[5] : curr[2]).startsWith('-');
+      const rawAmount = parseInt(String(curr.length > 6 ? curr[5] : curr[2]).replace(/\D/g, ''), 10) || 0;
       const amount = isNegative ? -rawAmount : rawAmount;
       const tipe = curr.length > 6 ? curr[6] : curr[3];
+      const ket = curr.length > 7 ? curr[7] : (tipe === 'Masuk' ? 'Titipan Uang' : 'Uang Saku');
+      
       saldoTitipan += (tipe === 'Masuk' ? amount : -amount);
+      
+      history.push({
+        date: curr[0],
+        description: ket || (tipe === 'Masuk' ? 'Uang Masuk' : 'Uang Keluar'),
+        type: tipe, // 'Masuk' or 'Keluar'
+        amount: amount
+      });
     });
 
     // Get Tarif Base
@@ -362,24 +373,40 @@ app.get("/api/public/keuangan/:id", async (req, res) => {
         }
     }
 
-    // Tunggakan calculation
+    // Tunggakan calculation and add payments to history
     const syahriahData = await getSheetData('Syahriah!A2:M') || [];
     const financeData = await getSheetData('Finance!A2:M') || [];
     
-    let allFinanceRecords = [
+    const relevantFinance = [
         ...syahriahData,
         ...financeData.filter((f: any) => f[4] !== 'Harian' && f[4] !== 'Tabungan')
-    ].filter((r: any) => r[1] === decodedId)
-     .sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime());
+    ].filter((r: any) => r[1] === decodedId);
 
+    relevantFinance.forEach((r: any) => {
+      const bayar = parseInt(String(r[7]).replace(/\D/g, ''), 10) || 0;
+      if (bayar > 0) {
+        history.push({
+          date: r[0],
+          description: `Syahriah ${r[4]} ${r[5]}`,
+          type: 'Masuk',
+          amount: bayar
+        });
+      }
+    });
+
+    // Determine current tunggakan from the absolute latest finance record
     let tunggakan = 0;
-    if (allFinanceRecords.length > 0) {
-        const latestRecord = allFinanceRecords[0];
+    const sortedFinance = [...relevantFinance].sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime());
+    if (sortedFinance.length > 0) {
+        const latestRecord = sortedFinance[0];
         let kStr = String(latestRecord[9]);
         let kNeg = kStr.startsWith('-');
         let kVal = parseInt(kStr.replace(/\D/g, ''), 10) || 0;
         tunggakan = kNeg ? -kVal : kVal;
     }
+
+    // Final sorting of history by date descending
+    history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     res.json({
       namaSantri,
@@ -387,7 +414,9 @@ app.get("/api/public/keuangan/:id", async (req, res) => {
       kategori: isNdalem ? 'Ndalem' : 'Biasa',
       saldoTitipan,
       tagihanBulanIni: kewajibanBulanan,
-      tunggakan
+      tunggakan,
+      history: history.slice(0, 20), // Send last 20 transactions
+      lastSync: new Date().toISOString()
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
