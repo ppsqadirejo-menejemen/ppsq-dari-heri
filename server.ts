@@ -179,7 +179,7 @@ async function sendFinanceNotification(params: {
 
   // 2. Build the message with the requested automatic link
   const cleanId = santriId.startsWith("'") ? santriId.slice(1) : santriId;
-  const baseUrl = process.env.APP_URL || 'https://sim-ppsq2.vercel.app';
+  const baseUrl = process.env.APP_URL || process.env.URL_APLIKASI || 'https://ppsq2.vercel.app';
   // Ensure no trailing slash
   const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
   const cekKeuanganUrl = `${cleanBaseUrl}/cek-keuangan/${encodeURIComponent(cleanId)}`;
