@@ -1,0 +1,9 @@
+{
+  "name": "Remix: PPSQ Management System 5",
+  "description": "Sistem Informasi Manajemen Pondok Pesantren Syafaatul Qur\u0027an (PPSQ) terintegrasi dengan Google Sheets, Cloudinary, dan WhatsApp.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
