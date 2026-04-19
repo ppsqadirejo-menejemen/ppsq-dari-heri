@@ -3361,15 +3361,19 @@ const SettingsManagement = ({ user }: { user: any }) => {
   const [spreadsheetUrl, setSpreadsheetUrl] = useState<string | null>(null);
   const [setupLoading, setSetupLoading] = useState(false);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [santris, setSantris] = useState<any[]>([]);
+  const [showBillingConfirm, setShowBillingConfirm] = useState(false);
+  const [billingFilter, setBillingFilter] = useState({ category: 'All', santriId: 'All' });
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [resSettings, resUsers, resFinance, resUrl] = await Promise.all([
+      const [resSettings, resUsers, resFinance, resUrl, resSantri] = await Promise.all([
         fetchWithCache('/api/settings'),
         fetchWithCache('/api/data/Users'),
         fetchWithCache('/api/settings/finance'),
-        fetchWithCache('/api/spreadsheet-url').catch(() => ({ data: { url: null } }))
+        fetchWithCache('/api/spreadsheet-url').catch(() => ({ data: { url: null } })),
+        fetchWithCache('/api/data/Santri')
       ]);
       const settingsData = resSettings.data;
       setSettings(settingsData);
@@ -3378,6 +3382,7 @@ const SettingsManagement = ({ user }: { user: any }) => {
       setFinanceSettings(resFinance.data || {});
       setLocalFinanceSettings(resFinance.data || {});
       setSpreadsheetUrl(resUrl.data?.url || null);
+      setSantris(resSantri.data || []);
     } catch (err) {
       console.error("Failed to fetch settings/users/finance:", err);
     } finally {
@@ -3493,15 +3498,21 @@ const SettingsManagement = ({ user }: { user: any }) => {
   };
 
   const triggerManualBilling = async () => {
-    if (!window.confirm("Apakah Anda yakin ingin mengirim notifikasi tagihan syahriah ke seluruh wali santri aktif sekarang?")) return;
-    
     setBillingLoading(true);
+    setShowBillingConfirm(false);
     try {
-      const res = await axios.post('/api/admin/trigger-billing', { adminName: user?.name || 'Admin' });
+      const filter: any = {};
+      if (billingFilter.category !== 'All') filter.category = billingFilter.category;
+      if (billingFilter.santriId !== 'All') filter.santriId = billingFilter.santriId;
+
+      const res = await axios.post('/api/admin/trigger-billing', { 
+        adminName: user?.name || 'Admin',
+        filter 
+      });
       if (res.data.success) {
-        setAlertInfo({ message: `Berhasil! ${res.data.totalSent} notifikasi telah dikirim ke wali santri.`, type: 'success' });
+        setAlertInfo({ message: `Berhasil! ${res.data.totalSent} notifikasi telah dikirim.`, type: 'success' });
       } else {
-        setAlertInfo({ message: res.data.message || "Gagal mengirim notifikasi mungkin karena sudah terkirim bulan ini.", type: 'error' });
+        setAlertInfo({ message: res.data.message || "Gagal mengirim notifikasi.", type: 'error' });
       }
     } catch (err: any) {
       setAlertInfo({ message: "Kesalahan sistem: " + (err.response?.data?.error || err.message), type: 'error' });
@@ -3509,6 +3520,15 @@ const SettingsManagement = ({ user }: { user: any }) => {
       setBillingLoading(false);
     }
   };
+
+  const billingFilterText = useMemo(() => {
+    if (billingFilter.santriId !== 'All') {
+      const s = santris.find(s => s[3] === billingFilter.santriId);
+      return `untuk santri: ${s ? s[2] : billingFilter.santriId}`;
+    }
+    if (billingFilter.category !== 'All') return `untuk kategori: ${billingFilter.category}`;
+    return "ke seluruh wali santri aktif";
+  }, [billingFilter, santris]);
 
   const runSetup = async () => {
     setSetupLoading(true);
@@ -3743,114 +3763,113 @@ const SettingsManagement = ({ user }: { user: any }) => {
               ) : activeTab === 'automation' ? (
                 <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
                    <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Otomasi Tagihan WA</h2>
-                    <p className="text-sm text-slate-500">Atur jadwal pengiriman notifikasi tagihan syahriah otomatis ke wali santri.</p>
+                    <h2 className="text-2xl font-bold text-slate-800">Kirim Tagihan WA</h2>
+                    <p className="text-sm text-slate-500">Kirim notifikasi tagihan syahriah bulanan ke wali santri secara manual.</p>
                   </div>
 
-                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-6">
-                    <div className="flex items-center justify-between gap-4">
+                  <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100 space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       <div>
-                        <h4 className="font-bold text-slate-800">Status Otomasi</h4>
-                        <p className="text-xs text-slate-500">Aktifkan untuk mulai mengirim tagihan setiap bulan secara otomatis.</p>
+                        <label className="block text-sm font-bold text-slate-700 mb-3">Filter Kategori</label>
+                        <select 
+                          value={billingFilter.category}
+                          onChange={(e) => setBillingFilter({...billingFilter, category: e.target.value, santriId: 'All'})}
+                          className="w-full px-5 py-4 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white"
+                        >
+                          <option value="All">Semua Kategori</option>
+                          <option value="Santri Biasa">Santri Biasa</option>
+                          <option value="Santri Ndalem">Santri Ndalem</option>
+                        </select>
+                        <p className="mt-2 text-xs text-slate-500 italic">* Pilih kategori tertentu jika ingin mengirim per kelompok.</p>
                       </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-3">Pilih Spesifik Santri</label>
+                        <select 
+                          value={billingFilter.santriId}
+                          onChange={(e) => setBillingFilter({...billingFilter, santriId: e.target.value, category: 'All'})}
+                          className="w-full px-5 py-4 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white"
+                        >
+                          <option value="All">Kirim ke Banyak (Berdasarkan Kategori)</option>
+                          {santris
+                            .filter(s => s[26] === 'Aktif')
+                            .sort((a, b) => a[2].localeCompare(b[2]))
+                            .map(s => (
+                              <option key={s[3]} value={s[3]}>{s[2]} ({s[3]})</option>
+                            ))
+                          }
+                        </select>
+                        <p className="mt-2 text-xs text-slate-500 italic">* Pilih santri tertentu untuk mengirim tagihan ke satu orang saja.</p>
+                      </div>
+                    </div>
+
+                    <div className="p-5 bg-blue-50 rounded-2xl flex gap-4 text-blue-800 border border-blue-100">
+                      <Info className="w-6 h-6 flex-shrink-0" />
+                      <div className="space-y-1">
+                        <p className="text-sm font-bold">Informasi Pengiriman</p>
+                        <p className="text-xs leading-relaxed opacity-90">
+                          Pesan akan berisi rincian tagihan bulan berjalan {MONTHS[new Date().getMonth()]} {new Date().getFullYear()}, saldo tunggakan (jika ada), dan total yang harus dibayar. Pastikan HP admin Fonnte aktif.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-center pt-4">
                       <button 
-                        onClick={() => setLocalFinanceSettings({...localFinanceSettings, billing_status: localFinanceSettings.billing_status === 'Active' ? 'Inactive' : 'Active'})}
-                        className={`w-14 h-8 rounded-full transition-all relative ${localFinanceSettings.billing_status === 'Active' ? 'bg-emerald-600' : 'bg-slate-300'}`}
+                        onClick={() => setShowBillingConfirm(true)}
+                        disabled={billingLoading}
+                        className="w-full md:w-auto px-12 py-5 bg-emerald-600 text-white rounded-3xl font-bold shadow-2xl shadow-emerald-200 hover:bg-emerald-700 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                       >
-                        <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-sm transition-all ${localFinanceSettings.billing_status === 'Active' ? 'left-7' : 'left-1'}`} />
+                        {billingLoading ? (
+                          <>
+                            <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            Sedang Memproses...
+                          </>
+                        ) : (
+                          <>
+                            <BellRing className="w-6 h-6" />
+                            Kirim Tagihan Sekarang
+                          </>
+                        )}
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-slate-200">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Setiap Tanggal</label>
-                        <select 
-                          value={localFinanceSettings.billing_day || '10'}
-                          onChange={(e) => setLocalFinanceSettings({...localFinanceSettings, billing_day: e.target.value})}
-                          className="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
-                        >
-                          {Array.from({length: 28}, (_, i) => i + 1).map(d => (
-                            <option key={d} value={d}>{d}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex gap-2">
-                        <div className="flex-1">
-                          <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Jam</label>
-                          <select 
-                            value={localFinanceSettings.billing_hour || '09'}
-                            onChange={(e) => setLocalFinanceSettings({...localFinanceSettings, billing_hour: e.target.value})}
-                            className="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
+                    {/* Manual Billing Confirm Modal */}
+                    <AnimatePresence>
+                      {showBillingConfirm && (
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                          <motion.div 
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100"
                           >
-                            {Array.from({length: 24}, (_, i) => (i < 10 ? '0' + i : i)).map(h => (
-                              <option key={h} value={h}>{h}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="flex-1">
-                          <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Menit</label>
-                          <select 
-                            value={localFinanceSettings.billing_minute || '00'}
-                            onChange={(e) => setLocalFinanceSettings({...localFinanceSettings, billing_minute: e.target.value})}
-                            className="w-full px-4 py-3 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
-                          >
-                            {Array.from({length: 60}, (_, i) => (i < 10 ? '0' + i : i.toString())).map(m => (
-                              <option key={m} value={m}>{m}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-emerald-50 rounded-2xl flex gap-3 text-emerald-800">
-                      <Zap className="w-5 h-5 flex-shrink-0" />
-                      <p className="text-xs leading-relaxed font-medium">
-                        * Penagihan akan dikirimkan otomatis ke seluruh wali santri aktif pada tanggal <span className="font-bold">{localFinanceSettings.billing_day || '10'}</span> pukul <span className="font-bold">{localFinanceSettings.billing_hour || '09'}:{localFinanceSettings.billing_minute || '00'}</span> WIB. Pastikan HP admin Fonnte dalam kondisi aktif dan terhubung internet.
-                      </p>
-                    </div>
-
-                    <div className="pt-4 border-t border-slate-200">
-                      <div className="bg-amber-50 p-6 rounded-3xl border border-amber-100 flex flex-col md:flex-row items-center justify-between gap-6">
-                        <div className="flex gap-4">
-                          <div className="p-3 bg-amber-100 rounded-2xl h-fit">
-                            <Send className="w-6 h-6 text-amber-600" />
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-amber-800">Kirim Notifikasi Manual</h4>
-                            <p className="text-sm text-amber-700/80 mt-1 leading-relaxed">
-                              Gunakan tombol ini untuk mengirim tagihan ke seluruh wali santri secara manual tanpa menunggu jadwal otomatis.
+                            <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                              <BellRing className="w-8 h-8 text-blue-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800 text-center mb-2">Konfirmasi Pengiriman</h3>
+                            <p className="text-slate-500 text-center mb-8">
+                              Kirim notifikasi tagihan syahriah <span className="font-bold text-blue-600">{billingFilterText}</span>? 
+                              Pastikan data pembayaran sudah terupdate.
                             </p>
-                          </div>
+                            
+                            <div className="flex gap-4">
+                              <button 
+                                onClick={() => setShowBillingConfirm(false)}
+                                className="flex-1 px-6 py-4 rounded-2xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all"
+                              >
+                                Batal
+                              </button>
+                              <button 
+                                onClick={triggerManualBilling}
+                                className="flex-1 px-6 py-4 rounded-2xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+                              >
+                                Ya, Kirim
+                              </button>
+                            </div>
+                          </motion.div>
                         </div>
-                        <button 
-                          onClick={triggerManualBilling}
-                          disabled={billingLoading}
-                          className="whitespace-nowrap bg-amber-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-amber-200 hover:bg-amber-700 transition-all flex items-center gap-2 disabled:opacity-50"
-                        >
-                          {billingLoading ? (
-                            <>
-                              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                              Mengirim...
-                            </>
-                          ) : (
-                            <>
-                              <BellRing className="w-5 h-5" />
-                              Kirim Sekarang
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-6 flex justify-end">
-                    <button 
-                      onClick={saveFinanceSettings}
-                      disabled={saving}
-                      className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-bold shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50"
-                    >
-                      {saving ? 'Menyimpan...' : <><Save className="w-5 h-5" /> Simpan Jadwal</>}
-                    </button>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </div>
               ) : activeTab === 'setup' ? (

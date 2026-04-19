@@ -439,10 +439,9 @@ app.get("/api/public/keuangan/:id", async (req, res) => {
     const sortedFinance = [...relevantFinance].sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime());
     if (sortedFinance.length > 0) {
         const latestRecord = sortedFinance[0];
-        let kStr = String(latestRecord[9]);
-        let kNeg = kStr.startsWith('-');
-        let kVal = parseInt(kStr.replace(/\D/g, ''), 10) || 0;
-        tunggakan = kNeg ? -kVal : kVal;
+        const sVal = parseCurrency(latestRecord[9]); // Kekurangan
+        const tVal = parseCurrency(latestRecord[8]); // Titipan
+        tunggakan = sVal - tVal;
     }
 
     // Final sorting of history by date descending
@@ -1166,8 +1165,12 @@ app.get("/api/data/:sheetName", async (req, res) => {
 // Add Syahriah Record
 app.post("/api/syahriah/add", async (req, res) => {
   try {
-    const { santriId, namaSantri, namaAyah, bulan, tahun, tagihan, bayar, keterangan, tanggal } = req.body;
-    const kekurangan = parseInt(tagihan || '0') - parseInt(bayar || '0');
+    const { santriId, namaSantri, namaAyah, bulan, tahun, tagihan, bayar, keterangan, tanggal, adminName, saldoLalu } = req.body;
+    const prevBal = parseInt(saldoLalu || '0');
+    const totalDihitung = (parseInt(tagihan || '0') + prevBal) - parseInt(bayar || '0');
+    
+    const titipan = totalDihitung < 0 ? Math.abs(totalDihitung) : 0;
+    const kekurangan = totalDihitung > 0 ? totalDihitung : 0;
     
     const rowData = [
       new Date().toISOString(),
@@ -1178,15 +1181,17 @@ app.post("/api/syahriah/add", async (req, res) => {
       tahun || "",
       tagihan || "0",
       bayar || "0",
+      titipan.toString(),
       kekurangan.toString(),
       keterangan || "",
-      tanggal || new Date().toISOString().split('T')[0]
+      tanggal || new Date().toISOString().split('T')[0],
+      adminName || "System"
     ];
 
     await appendToSheet('Syahriah!A2', [rowData]);
     
     // Send WhatsApp Notification
-    const { phone } = req.body;
+    const { phone, kewajibanBulanan, tanggalTerakhir } = req.body;
     await sendFinanceNotification({
       santriId: santriId,
       namaSantri: namaSantri,
@@ -1196,8 +1201,12 @@ app.post("/api/syahriah/add", async (req, res) => {
       amount: parseInt(bayar || '0'),
       bulan: bulan,
       tahun: tahun,
+      titipanBaru: titipan,
       kekuranganBaru: kekurangan,
-      keterangan: keterangan
+      keterangan: keterangan,
+      kewajibanBulanan: parseInt(kewajibanBulanan || '0'),
+      saldoLalu: parseInt(saldoLalu || '0'),
+      tanggalTerakhir: tanggalTerakhir
     });
 
     res.json({ success: true });
@@ -1244,22 +1253,33 @@ app.post("/api/titipan/add", async (req, res) => {
 // Add Finance Record (Legacy/Generic)
 app.post("/api/finance/add", async (req, res) => {
   try {
-    const { santriId, namaSantri, namaAyah, bulan, tahun, tagihan, bayar, titipan, keterangan, tanggal, adminName, sheetName } = req.body;
+    const { santriId, namaSantri, namaAyah, bulan, tahun, tagihan, bayar, titipan, keterangan, tanggal, adminName, sheetName, saldoLalu } = req.body;
     
     const tagihanNum = parseInt(tagihan || '0');
     const bayarNum = parseInt(bayar || '0');
-    let kekuranganNum = 0;
-    let titipanNum = parseInt(titipan || '0');
+    const extraTitipan = parseInt(titipan || '0');
+    const prevBal = parseInt(saldoLalu || '0');
+    
+    let targetTitipan = 0;
+    let targetKekurangan = 0;
 
     if (bulan !== 'Harian') {
-      if (bayarNum > tagihanNum) {
-        titipanNum += (bayarNum - tagihanNum);
-        kekuranganNum = 0;
+      // Logic: (Current Bill + Past Debt) - (Paid Amount + Previous Credit + Manual Extra Credit)
+      // Since saldoLalu correctly represents Net Debt (Debt - Credit), we can simplify:
+      const totalDue = tagihanNum + prevBal;
+      const totalPaid = bayarNum + extraTitipan;
+      const finalBal = totalDue - totalPaid;
+
+      if (finalBal < 0) {
+        targetTitipan = Math.abs(finalBal);
+        targetKekurangan = 0;
       } else {
-        kekuranganNum = tagihanNum - bayarNum;
+        targetKekurangan = finalBal;
+        targetTitipan = 0;
       }
     } else {
-      kekuranganNum = tagihanNum - bayarNum;
+      targetKekurangan = tagihanNum - bayarNum;
+      targetTitipan = extraTitipan;
     }
     
     const timestamp = new Date().toISOString();
@@ -1272,8 +1292,8 @@ app.post("/api/finance/add", async (req, res) => {
       tahun || "",
       tagihan || "0",
       bayar || "0",
-      titipanNum.toString(),
-      kekuranganNum.toString(),
+      targetTitipan.toString(),
+      targetKekurangan.toString(),
       keterangan || "",
       tanggal || timestamp.split('T')[0],
       adminName || ""
@@ -1341,7 +1361,7 @@ app.post("/api/finance/add", async (req, res) => {
     }
 
     // Send WhatsApp Notification
-    const { phone, kewajibanBulanan, saldoLalu, tanggalTerakhir } = req.body;
+    const { phone, kewajibanBulanan, tanggalTerakhir } = req.body;
     let waSent = false;
     if (phone || santriId) {
       waSent = await sendFinanceNotification({
@@ -1353,8 +1373,8 @@ app.post("/api/finance/add", async (req, res) => {
         amount: bayarNum,
         bulan: bulan,
         tahun: tahun,
-        titipanBaru: titipanNum,
-        kekuranganBaru: kekuranganNum,
+        titipanBaru: targetTitipan,
+        kekuranganBaru: targetKekurangan,
         keterangan: keterangan,
         kewajibanBulanan: parseInt(kewajibanBulanan || '0'),
         saldoLalu: parseInt(saldoLalu || '0'),
@@ -1643,7 +1663,7 @@ const parseCurrency = (val: any): number => {
 };
 
 // Helper function to process automated billing
-async function processAutoBilling(triggeredBy: string) {
+async function processAutoBilling(triggeredBy: string, filter?: { santriId?: string, category?: string }) {
   const auth = getGoogleAuth();
   if (!auth) throw new Error("Google Auth not configured");
   const spreadsheetId = process.env.GOOGLE_SHEET_ID!;
@@ -1676,13 +1696,15 @@ async function processAutoBilling(triggeredBy: string) {
   const currentMonthName = now.toLocaleString('id-ID', { month: 'long' });
   const currentYear = now.getFullYear();
 
-  // 2. Check log_penagihan to prevent duplicate send for this month
-  const logData = await getSheetData('log_penagihan!A2:B1000') || [];
-  const alreadySent = logData.some((row: any) => row[0] === currentMonthName && parseInt(row[1]) === currentYear);
+  // 2. Check log_penagihan to prevent duplicate send for this month (only for automated system)
+  if (triggeredBy === 'System') {
+    const logData = await getSheetData('log_penagihan!A2:B1000') || [];
+    const alreadySent = logData.some((row: any) => row[0] === currentMonthName && parseInt(row[1]) === currentYear);
 
-  if (alreadySent && triggeredBy === 'System') {
-    console.log(`Cron [Auto Billing]: Already sent for ${currentMonthName} ${currentYear}. Skipping.`);
-    return { skipped: true, message: `Already sent for ${currentMonthName} ${currentYear}.` };
+    if (alreadySent) {
+      console.log(`Cron [Auto Billing]: Already sent for ${currentMonthName} ${currentYear}. Skipping.`);
+      return { skipped: true, message: `Already sent for ${currentMonthName} ${currentYear}.` };
+    }
   }
 
   // 3. Fetch Data
@@ -1694,7 +1716,22 @@ async function processAutoBilling(triggeredBy: string) {
 
   if (!santriDataFull) return { error: "No student data found" };
 
-  const activeSantri = santriDataFull.filter((s: any) => s[26] === 'Aktif');
+  let activeSantri = santriDataFull.filter((s: any) => s[26] === 'Aktif');
+
+  // Apply Filters
+  if (filter) {
+    if (filter.santriId) {
+      activeSantri = activeSantri.filter((s: any) => s[3] === filter.santriId);
+    }
+    if (filter.category) {
+      const targetCategory = filter.category.toLowerCase();
+      activeSantri = activeSantri.filter((s: any) => {
+        const studentCategory = String(s[31] || '').toLowerCase();
+        return studentCategory === targetCategory;
+      });
+    }
+  }
+
   const tariffs: any = {};
   if (tariffsData) {
     tariffsData.forEach((t: any) => tariffs[t[0]] = parseCurrency(t[2]));
@@ -1773,10 +1810,10 @@ app.get("/api/cron/auto-billing", async (req, res) => {
 
 // Manual Billing Trigger API
 app.post("/api/admin/trigger-billing", async (req, res) => {
-  const { adminName } = req.body;
-  console.log(`Manual Billing: Triggered by ${adminName} at`, new Date().toLocaleString());
+  const { adminName, filter } = req.body;
+  console.log(`Manual Billing: Triggered by ${adminName} at`, new Date().toLocaleString(), 'Filter:', filter);
   try {
-    const result = await processAutoBilling(`Admin: ${adminName || 'Unknown'}`);
+    const result = await processAutoBilling(`Admin: ${adminName || 'Unknown'}`, filter);
     res.json(result);
   } catch (error: any) {
     console.error("Manual Billing Failed:", error);
