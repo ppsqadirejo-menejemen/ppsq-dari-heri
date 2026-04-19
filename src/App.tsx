@@ -45,6 +45,7 @@ import {
   AlertCircle,
   FileCheck,
   Zap,
+  BellRing,
   Globe,
   Database,
   Info
@@ -3359,6 +3360,7 @@ const SettingsManagement = ({ user }: { user: any }) => {
   const [alertInfo, setAlertInfo] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [spreadsheetUrl, setSpreadsheetUrl] = useState<string | null>(null);
   const [setupLoading, setSetupLoading] = useState(false);
+  const [billingLoading, setBillingLoading] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -3487,6 +3489,24 @@ const SettingsManagement = ({ user }: { user: any }) => {
       setAlertInfo({ message: `Gagal menyimpan konfigurasi: ${errorMsg}`, type: 'error' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const triggerManualBilling = async () => {
+    if (!window.confirm("Apakah Anda yakin ingin mengirim notifikasi tagihan syahriah ke seluruh wali santri aktif sekarang?")) return;
+    
+    setBillingLoading(true);
+    try {
+      const res = await axios.post('/api/admin/trigger-billing', { adminName: user?.name || 'Admin' });
+      if (res.data.success) {
+        setAlertInfo({ message: `Berhasil! ${res.data.totalSent} notifikasi telah dikirim ke wali santri.`, type: 'success' });
+      } else {
+        setAlertInfo({ message: res.data.message || "Gagal mengirim notifikasi mungkin karena sudah terkirim bulan ini.", type: 'error' });
+      }
+    } catch (err: any) {
+      setAlertInfo({ message: "Kesalahan sistem: " + (err.response?.data?.error || err.message), type: 'error' });
+    } finally {
+      setBillingLoading(false);
     }
   };
 
@@ -3787,6 +3807,39 @@ const SettingsManagement = ({ user }: { user: any }) => {
                       <p className="text-xs leading-relaxed font-medium">
                         * Penagihan akan dikirimkan otomatis ke seluruh wali santri aktif pada tanggal <span className="font-bold">{localFinanceSettings.billing_day || '10'}</span> pukul <span className="font-bold">{localFinanceSettings.billing_hour || '09'}:{localFinanceSettings.billing_minute || '00'}</span> WIB. Pastikan HP admin Fonnte dalam kondisi aktif dan terhubung internet.
                       </p>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-200">
+                      <div className="bg-amber-50 p-6 rounded-3xl border border-amber-100 flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="flex gap-4">
+                          <div className="p-3 bg-amber-100 rounded-2xl h-fit">
+                            <Send className="w-6 h-6 text-amber-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-amber-800">Kirim Notifikasi Manual</h4>
+                            <p className="text-sm text-amber-700/80 mt-1 leading-relaxed">
+                              Gunakan tombol ini untuk mengirim tagihan ke seluruh wali santri secara manual tanpa menunggu jadwal otomatis.
+                            </p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={triggerManualBilling}
+                          disabled={billingLoading}
+                          className="whitespace-nowrap bg-amber-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-amber-200 hover:bg-amber-700 transition-all flex items-center gap-2 disabled:opacity-50"
+                        >
+                          {billingLoading ? (
+                            <>
+                              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              Mengirim...
+                            </>
+                          ) : (
+                            <>
+                              <BellRing className="w-5 h-5" />
+                              Kirim Sekarang
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
 
