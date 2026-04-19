@@ -33,7 +33,7 @@
   "crons": [
     {
       "path": "/api/cron/auto-billing",
-      "schedule": "0 * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }

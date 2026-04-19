@@ -1668,17 +1668,13 @@ app.get("/api/cron/auto-billing", async (req, res) => {
 
     const now = new Date();
     const currentDay = now.getDate();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
     
-    // We check if it's the right day and hour. 
-    // Since this might run every 15-60 mins, we check if we are within the target hour window.
-    const isTargetDay = currentDay === billingDay;
-    const isTargetHour = currentHour === billingHour;
+    // Check if current day matches the target billing day
+    const isTargetDay = currentDay === (parseInt(fSettings.billing_day) || 10);
 
-    if (!isTargetDay || !isTargetHour) {
-      console.log(`Cron [Auto Billing]: Not scheduled time yet. (Scheduled: Day ${billingDay} Hr ${billingHour}, Current: Day ${currentDay} Hr ${currentHour})`);
-      return res.json({ message: "Not scheduled time yet." });
+    if (!isTargetDay) {
+      console.log(`Cron [Auto Billing]: Not the scheduled day. (Target: ${fSettings.billing_day}, Current: ${currentDay})`);
+      return res.json({ message: `Not the scheduled day (Target: ${fSettings.billing_day}).` });
     }
 
     const currentMonthName = now.toLocaleString('id-ID', { month: 'long' });
